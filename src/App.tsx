@@ -14,8 +14,10 @@ import { JobDetailPage } from './pages/JobDetailPage'
 import { CandidatesPage } from './pages/CandidatesPage'
 import { CandidateProfilePage } from './pages/CandidateProfilePage'
 import { ApplicationsPage } from './pages/ApplicationsPage'
+import { CandidateApplicationsPage } from './pages/CandidateApplicationsPage'
 import { ApplicationDetailPage } from './pages/ApplicationDetailPage'
 import { ProfileSettingsPage } from './pages/ProfileSettingsPage'
+import { EmployerProfilePage } from './pages/EmployerProfilePage'
 import { NewJobPage } from './pages/NewJobPage'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -96,6 +98,15 @@ function App() {
           />
           
           <Route
+            path="/my-applications"
+            element={
+              <ProtectedRoute requiredRole="candidate">
+                <CandidateApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
             path="/applications/:id"
             element={
               <ProtectedRoute>
@@ -109,6 +120,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProfileSettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/company-profile"
+            element={
+              <ProtectedRoute requiredRole="employer">
+                <EmployerProfilePage />
               </ProtectedRoute>
             }
           />

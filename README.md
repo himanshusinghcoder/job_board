@@ -84,7 +84,7 @@ A production-ready job platform that connects employers and candidates using adv
    - Run these SQL files in order in your Supabase SQL Editor:
      1. `step1-basic-auth.sql`
      2. `step2-add-missing-tables.sql` 
-     3. `test-candidate-data.sql` (optional sample data)
+     3. `dashboard-test-data.sql` (optional - adds jobs, employers, and applications for testing)
    
    - Add this essential policy:
    ```sql

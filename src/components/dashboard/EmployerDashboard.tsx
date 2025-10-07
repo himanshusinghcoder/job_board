@@ -23,11 +23,23 @@ interface Candidate {
   full_name: string
   headline: string
   location: string
+  match_score?: number
+  best_matching_job?: string
   candidate_profiles?: {
     years_experience: number
     skills: string[]
+    work_type?: string[]
     visible: boolean
   }
+}
+
+interface EmployerProfile {
+  id: string
+  name: string
+  website?: string
+  logo_url?: string
+  verified: boolean
+  created_at: string
 }
 
 interface Stats {
@@ -37,10 +49,65 @@ interface Stats {
   scheduledInterviews: number
 }
 
+// AI Matching Algorithm for candidates
+function calculateCandidateJobMatch(candidateProfile: any, job: any): number {
+  if (!candidateProfile) return 0
+  
+  let score = 0
+  
+  // Skills match (40% weight)
+  if (candidateProfile.skills && job.skills) {
+    const matchingSkills = candidateProfile.skills.filter((candidateSkill: string) =>
+      job.skills.some((jobSkill: string) =>
+        candidateSkill.toLowerCase().includes(jobSkill.toLowerCase()) ||
+        jobSkill.toLowerCase().includes(candidateSkill.toLowerCase())
+      )
+    )
+    const skillScore = job.skills.length > 0 ? (matchingSkills.length / job.skills.length) * 40 : 0
+    score += skillScore
+  }
+
+  // Experience level match (25% weight)
+  if (candidateProfile.years_experience !== null && job.experience_level) {
+    let expScore = 0
+    const years = candidateProfile.years_experience
+    
+    switch (job.experience_level) {
+      case 'entry':
+        expScore = years <= 2 ? 25 : Math.max(0, 25 - (years - 2) * 5)
+        break
+      case 'mid':
+        expScore = years >= 2 && years <= 7 ? 25 : Math.max(0, 25 - Math.abs(4.5 - years) * 3)
+        break
+      case 'senior':
+        expScore = years >= 5 ? 25 : Math.max(0, 25 - (5 - years) * 5)
+        break
+      case 'lead':
+      case 'executive':
+        expScore = years >= 8 ? 25 : Math.max(0, 25 - (8 - years) * 3)
+        break
+    }
+    score += expScore
+  }
+
+  // Work type match (20% weight)
+  if (candidateProfile.work_type && job.work_type) {
+    if (candidateProfile.work_type.includes(job.work_type)) {
+      score += 20
+    }
+  }
+
+  // Base compatibility score (15% weight)
+  score += 15
+
+  return Math.round(Math.min(100, score))
+}
+
 export function EmployerDashboard() {
   const { user } = useAuth()
   const [jobs, setJobs] = useState<Job[]>([])
   const [candidates, setCandidates] = useState<Candidate[]>([])
+  const [employerProfile, setEmployerProfile] = useState<EmployerProfile | null>(null)
   const [stats, setStats] = useState<Stats>({
     activeJobs: 0,
     totalApplications: 0,
@@ -62,7 +129,7 @@ export function EmployerDashboard() {
       // First get the employer profile
       const { data: employer } = await supabase
         .from('employers')
-        .select('id')
+        .select('*')
         .eq('owner_id', user.id)
         .single()
 
@@ -71,27 +138,92 @@ export function EmployerDashboard() {
         return
       }
 
+      setEmployerProfile(employer)
+
       // Load recent jobs
       const { data: jobsData } = await supabase
         .from('jobs')
-        .select(`
-          *,
-          applications(count)
-        `)
+        .select('*')
         .eq('employer_id', employer.id)
         .order('created_at', { ascending: false })
         .limit(5)
 
-      // Load top candidates (simplified for now - in real app would use AI matching)
+      // Load all applications for these jobs in a single query
+      const jobIds = (jobsData || []).map(job => job.id)
+      console.log('Loading applications for job IDs:', jobIds)
+      
+      const { data: applicationsData, error: appsError } = await supabase
+        .from('applications')
+        .select('job_id')
+        .in('job_id', jobIds)
+      
+      console.log('Applications data:', applicationsData)
+      console.log('Applications error:', appsError)
+
+      // Count applications for each job
+      const applicationCounts: Record<string, number> = {}
+      if (applicationsData) {
+        applicationsData.forEach(app => {
+          applicationCounts[app.job_id] = (applicationCounts[app.job_id] || 0) + 1
+        })
+      }
+
+      // Add application counts to jobs
+      const processedJobs = (jobsData || []).map(job => ({
+        ...job,
+        applications_count: applicationCounts[job.id] || 0
+      }))
+      
+      console.log('Processed jobs with counts:', processedJobs)
+
+      // Load top candidates with AI matching
       const { data: candidatesData } = await supabase
         .from('profiles')
         .select(`
           *,
-          candidate_profiles(*)
+          candidate_profiles(years_experience, skills, work_type, visible)
         `)
         .eq('role', 'candidate')
         .not('candidate_profiles', 'is', null)
-        .limit(5)
+        .eq('candidate_profiles.visible', true)
+        .limit(20) // Get more candidates to score and rank
+
+      // Calculate AI match scores for each candidate against employer's jobs
+      const candidatesWithScores = (candidatesData || []).map(candidate => {
+        const candidateProfile = candidate.candidate_profiles?.[0]
+        if (!candidateProfile || !jobsData || jobsData.length === 0) {
+          return {
+            ...candidate,
+            match_score: 0,
+            best_matching_job: null
+          }
+        }
+
+        // Find the best matching job for this candidate
+        let bestScore = 0
+        let bestJobTitle = null
+        
+        jobsData.forEach(job => {
+          const score = calculateCandidateJobMatch(candidateProfile, job)
+          if (score > bestScore) {
+            bestScore = score
+            bestJobTitle = job.title
+          }
+        })
+
+        return {
+          ...candidate,
+          match_score: bestScore,
+          best_matching_job: bestJobTitle,
+          candidate_profiles: candidateProfile
+        }
+      })
+
+      // Sort by match score and take top 5
+      const topMatchedCandidates = candidatesWithScores
+        .filter(candidate => candidate.match_score > 30) // Only show decent matches
+        .sort((a, b) => (b.match_score || 0) - (a.match_score || 0))
+        .slice(0, 5)
 
       // Calculate stats
       const { data: allJobs } = await supabase
@@ -107,12 +239,12 @@ export function EmployerDashboard() {
       const activeJobsCount = (allJobs || []).filter(j => j.active).length
       const applicationsCount = (allApplications || []).length
 
-      setJobs(jobsData || [])
-      setCandidates(candidatesData || [])
+      setJobs(processedJobs || [])
+      setCandidates(topMatchedCandidates || [])
       setStats({
         activeJobs: activeJobsCount,
         totalApplications: applicationsCount,
-        aiMatchedCandidates: (candidatesData || []).length,
+        aiMatchedCandidates: topMatchedCandidates?.length || 0,
         scheduledInterviews: 0 // TODO: implement interviews table
       })
 
@@ -149,9 +281,14 @@ export function EmployerDashboard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Employer Dashboard</h1>
-        <Link to="/jobs/new">
-          <Button>Post New Job</Button>
-        </Link>
+        <div className="flex gap-3">
+          <Link to="/company-profile">
+            <Button variant="outline">Edit Company Profile</Button>
+          </Link>
+          <Link to="/jobs/new">
+            <Button>Post New Job</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Quick Stats */}
@@ -177,6 +314,65 @@ export function EmployerDashboard() {
           <p className="text-sm text-gray-500 mt-1">Scheduled this week</p>
         </div>
       </div>
+
+      {/* Company Information */}
+      {employerProfile && (
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900">Company Information</h2>
+              <Link to="/company-profile">
+                <Button variant="outline" size="sm">Edit Profile</Button>
+              </Link>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="flex items-start space-x-6">
+              {employerProfile.logo_url ? (
+                <img 
+                  src={employerProfile.logo_url} 
+                  alt={`${employerProfile.name} logo`}
+                  className="w-16 h-16 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-500 text-xl font-bold">
+                    {employerProfile.name.charAt(0)}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1">
+                <h3 className="text-xl font-semibold text-gray-900">{employerProfile.name}</h3>
+                {employerProfile.website && (
+                  <p className="text-sm text-blue-600 mt-1">
+                    <a href={employerProfile.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                      {employerProfile.website}
+                    </a>
+                  </p>
+                )}
+                <div className="flex items-center space-x-4 mt-3">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {employerProfile.verified ? 'Verified' : 'Unverified'}
+                  </span>
+                  {employerProfile.website && (
+                    <a 
+                      href={employerProfile.website} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Visit Website
+                    </a>
+                  )}
+                </div>
+                <p className="text-gray-700 mt-3 text-sm leading-relaxed">
+                  Created on {new Date(employerProfile.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent Jobs */}
       <div className="bg-white rounded-lg shadow">
@@ -269,7 +465,10 @@ export function EmployerDashboard() {
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-900">Top AI-Matched Candidates</h2>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Top AI-Matched Candidates</h2>
+              <p className="text-sm text-gray-500 mt-1">Candidates ranked by AI compatibility with your job requirements</p>
+            </div>
             <Link to="/candidates">
               <Button variant="outline" size="sm">View All</Button>
             </Link>
@@ -283,9 +482,9 @@ export function EmployerDashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">No candidate matches yet</h3>
+              <h3 className="mt-4 text-lg font-medium text-gray-900">No AI-matched candidates found</h3>
               <p className="mt-2 text-sm text-gray-500">
-                Post jobs to start finding AI-matched candidates for your positions.
+                Post active jobs with detailed requirements to help our AI find the best candidates for your positions. Candidates with 30%+ match scores will appear here.
               </p>
               <Link to="/candidates" className="mt-4 inline-block">
                 <Button variant="outline">Browse Candidates</Button>
@@ -322,9 +521,32 @@ export function EmployerDashboard() {
                           </>
                         )}
                       </div>
+                      
+                      {/* Best matching job info */}
+                      {candidate.best_matching_job && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          Best match: <span className="font-medium text-gray-700">{candidate.best_matching_job}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    {/* AI Match Score */}
+                    {candidate.match_score !== undefined && (
+                      <div className="flex items-center gap-1">
+                        <svg className="h-4 w-4 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        <span className={`text-sm font-semibold ${
+                          candidate.match_score >= 80 ? 'text-green-600' :
+                          candidate.match_score >= 60 ? 'text-yellow-600' :
+                          candidate.match_score >= 40 ? 'text-orange-600' : 'text-red-600'
+                        }`}>
+                          {candidate.match_score}%
+                        </span>
+                      </div>
+                    )}
+                    
                     <Link to={`/candidates/${candidate.id}`}>
                       <Button variant="outline" size="sm">
                         View Profile
