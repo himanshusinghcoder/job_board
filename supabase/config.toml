@@ -1,0 +1,90 @@
+# Local development Supabase CLI version
+project_id = "job-finder-platform"
+
+[api]
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+port = 54322
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+refresh_token_rotation_enabled = true
+security_refresh_token_reuse_interval = 10
+enable_signup = true
+double_confirm_changes = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+# Allow/deny emails based on pattern
+[auth.email.template.invite]
+subject = "You have been invited"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.confirmation]
+subject = "Confirm your signup"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Your Magic Link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirm email change"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.sms.template.signup]
+content = "Your code is {{ .Code }}"
+
+[auth.sms.template.invite]
+content = "You have been invited to create a user on {{ .SiteURL }}. Your code is {{ .Code }}"
+
+[auth.sms.template.recovery]
+content = "Your code is {{ .Code }}"
+
+[db]
+port = 54322
+
+[studio]
+port = 54323
+
+[inbucket]
+port = 54324
+
+[storage]
+file_size_limit = "50MiB"
+
+[edge-runtime]
+port = 54325
+
+[analytics]
+port = 54327
+vector_port = 54328
+
+[functions.embed-candidate]
+verify_jwt = true
+
+[functions.embed-job]
+verify_jwt = true
+
+[functions.match-job-candidates]
+verify_jwt = true
+
+[functions.match-candidate-jobs]
+verify_jwt = true
+
+[functions.extract-resume]
+verify_jwt = true
+
+[functions.secure-chat]
+verify_jwt = true
