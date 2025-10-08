@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { batchAnalyzeJobMatches, type CandidateProfile, type JobPosting } from '../lib/openai-job-matching'
 
 // Hook to get candidate dashboard statistics
 export function useCandidateStats() {
@@ -263,41 +264,38 @@ export function useJobRecommendations(limit = 5) {
         })
       }
 
-      // Simple scoring algorithm
-      const scoredJobs = jobs.map(job => {
-        let score = 0
-        
-        // Skills match (60% weight) - increased since we removed experience matching
-        if (candidateProfile.skills && job.skills_required) {
-          const matchingSkills = candidateProfile.skills.filter((candidateSkill: string) =>
-            job.skills_required.some((jobSkill: string) =>
-              candidateSkill.toLowerCase().includes(jobSkill.toLowerCase()) ||
-              jobSkill.toLowerCase().includes(candidateSkill.toLowerCase())
-            )
-          )
-          const skillScore = job.skills_required.length > 0 ? (matchingSkills.length / job.skills_required.length) * 60 : 0
-          score += skillScore
-        }
+      // OpenAI-powered job matching
+      console.log('🤖 Using OpenAI for intelligent job matching...')
+      
+      // Prepare candidate profile for OpenAI analysis
+      const candidateForAI: CandidateProfile = {
+        skills: candidateProfile.skills || [],
+        years_experience: candidateProfile.years_experience,
+        work_type: candidateProfile.work_type,
+        bio: (candidateProfile as any).bio || '',
+        full_name: (candidateProfile as any).full_name || ''
+      }
 
-        // Work type match (25% weight) - increased weight
-        if (candidateProfile.work_type && job.remote !== undefined) {
-          // Convert job's remote boolean to work type preference
-          const jobWorkType = job.remote ? 'remote' : 'onsite'
-          if (candidateProfile.work_type.includes(jobWorkType) || candidateProfile.work_type.includes('hybrid')) {
-            score += 25
-          }
-        }
+      // Prepare jobs for OpenAI analysis
+      const jobsForAI: JobPosting[] = jobs.map(job => ({
+        id: job.id,
+        title: job.title,
+        description: job.description,
+        skills_required: job.skills_required || [],
+        remote: job.remote,
+        location: job.location,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        employers: job.employers && Array.isArray(job.employers) 
+          ? job.employers[0] 
+          : job.employers
+      }))
 
-        // Recency bonus (15% weight) 
-        const daysSincePosted = Math.floor((Date.now() - new Date(job.created_at).getTime()) / (1000 * 60 * 60 * 24))
-        const recencyScore = Math.max(0, 15 - daysSincePosted * 0.5)
-        score += recencyScore
-
-        // Add minimum base score to ensure all jobs have some compatibility
-        const baseScore = 25
-        const finalScore = Math.max(baseScore, score)
-
-        // Add application status information
+      // Use OpenAI to analyze job matches
+      const aiScoredJobs = await batchAnalyzeJobMatches(candidateForAI, jobsForAI, limit * 2)
+      
+      // Add application status information to AI-scored jobs
+      const scoredJobsWithApplications = aiScoredJobs.map(job => {
         const applicationInfo = applicationMap.get(job.id) || {
           application_id: null,
           application_status: null,
@@ -307,21 +305,20 @@ export function useJobRecommendations(limit = 5) {
 
         return { 
           ...job, 
-          match_score: Math.round(finalScore),
           ...applicationInfo
         }
       })
 
       // Sort by score and return top matches
-      console.log('⚡ Scored jobs sample:', scoredJobs.slice(0, 3).map(j => ({ id: j.id, title: j.title, score: j.match_score })))
+      console.log('⚡ AI-scored jobs sample:', scoredJobsWithApplications.slice(0, 3).map(j => ({ id: j.id, title: j.title, score: j.match_score })))
       
-      const filteredJobs = scoredJobs
-        .filter(job => job.match_score > 10) // Show jobs with any reasonable match
+      const filteredJobs = scoredJobsWithApplications
+        .filter(job => job.match_score > 20) // Higher threshold for AI scores
         .sort((a, b) => b.match_score - a.match_score)
         .slice(0, limit)
 
-      console.log('✅ Final recommendations:', filteredJobs.length, 'jobs')
-      console.log('📋 Top recommendations:', filteredJobs.map(j => ({ id: j.id, title: j.title, score: j.match_score })))
+      console.log('✅ Final AI recommendations:', filteredJobs.length, 'jobs')
+      console.log('📋 Top AI recommendations:', filteredJobs.map(j => ({ id: j.id, title: j.title, score: j.match_score })))
 
       return filteredJobs
     },
