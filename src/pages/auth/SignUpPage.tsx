@@ -56,8 +56,9 @@ export function SignUpPage() {
         
         setError(error.message)
       } else {
-        // Show success message and redirect
-        navigate('/dashboard')
+        // Redirect to dashboard - AuthContext will handle role-specific routing
+        console.log('✅ Sign up successful, redirecting to dashboard')
+        navigate('/dashboard', { replace: true })
       }
     } catch (err) {
       setError('An unexpected error occurred')

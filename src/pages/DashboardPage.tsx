@@ -3,12 +3,15 @@ import { CandidateDashboard } from '@/components/dashboard/CandidateDashboard'
 import { EmployerDashboard } from '@/components/dashboard/EmployerDashboard'
 
 export function DashboardPage() {
-  const { profile } = useAuth()
+  const { profile, loading } = useAuth()
 
-  if (!profile) {
+  if (loading || !profile) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="mt-4 text-gray-600">
+          {loading ? 'Loading your dashboard...' : 'Setting up your profile...'}
+        </p>
       </div>
     )
   }

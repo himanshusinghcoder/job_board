@@ -26,7 +26,9 @@ export function SignInPage() {
       if (error) {
         setError(error.message)
       } else {
-        navigate('/dashboard')
+        // Redirect to dashboard - AuthContext will handle role-specific routing
+        console.log('✅ Sign in successful, redirecting to dashboard')
+        navigate('/dashboard', { replace: true })
       }
     } catch (err) {
       setError('An unexpected error occurred')

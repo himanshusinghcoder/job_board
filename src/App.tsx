@@ -8,6 +8,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { LandingPage } from './pages/LandingPage'
 import { SignInPage } from './pages/auth/SignInPage'
 import { SignUpPage } from './pages/auth/SignUpPage'
+import { AuthCallbackPage } from './pages/auth/AuthCallbackPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { JobsPage } from './pages/JobsPage'
 import { JobDetailPage } from './pages/JobDetailPage'
@@ -31,6 +32,7 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth/signin" element={<SignInPage />} />
         <Route path="/auth/signup" element={<SignUpPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         
         {/* Protected routes with layout */}
         <Route element={<Layout />}>

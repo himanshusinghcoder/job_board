@@ -88,6 +88,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         await fetchProfile(session.user.id)
+        
+        // Handle automatic redirection for candidates after authentication
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Small delay to ensure profile is loaded
+          setTimeout(() => {
+            const currentPath = window.location.pathname
+            const isAuthPage = currentPath.includes('/auth/') || currentPath === '/'
+            
+            // Only redirect if user is on auth pages or landing page
+            if (isAuthPage) {
+              console.log('🔄 Redirecting authenticated user to dashboard')
+              window.location.href = '/dashboard'
+            }
+          }, 500)
+        }
       } else {
         setProfile(null)
         setLoading(false)

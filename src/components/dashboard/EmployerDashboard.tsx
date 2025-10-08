@@ -18,21 +18,6 @@ interface Job {
   applications_count?: number
 }
 
-interface Candidate {
-  id: string
-  full_name: string
-  headline: string
-  location: string
-  match_score?: number
-  best_matching_job?: string
-  candidate_profiles?: {
-    years_experience: number
-    skills: string[]
-    work_type?: string[]
-    visible: boolean
-  }
-}
-
 interface EmployerProfile {
   id: string
   name: string
@@ -106,7 +91,6 @@ function calculateCandidateJobMatch(candidateProfile: any, job: any): number {
 export function EmployerDashboard() {
   const { user } = useAuth()
   const [jobs, setJobs] = useState<Job[]>([])
-  const [candidates, setCandidates] = useState<Candidate[]>([])
   const [employerProfile, setEmployerProfile] = useState<EmployerProfile | null>(null)
   const [stats, setStats] = useState<Stats>({
     activeJobs: 0,
@@ -240,7 +224,6 @@ export function EmployerDashboard() {
       const applicationsCount = (allApplications || []).length
 
       setJobs(processedJobs || [])
-      setCandidates(topMatchedCandidates || [])
       setStats({
         activeJobs: activeJobsCount,
         totalApplications: applicationsCount,
@@ -453,105 +436,6 @@ export function EmployerDashboard() {
                         </Button>
                       </Link>
                     )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* AI-Matched Candidates */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Top AI-Matched Candidates</h2>
-              <p className="text-sm text-gray-500 mt-1">Candidates ranked by AI compatibility with your job requirements</p>
-            </div>
-            <Link to="/candidates">
-              <Button variant="outline" size="sm">View All</Button>
-            </Link>
-          </div>
-        </div>
-        <div className="p-6">
-          {candidates.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto h-12 w-12 text-gray-400">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">No AI-matched candidates found</h3>
-              <p className="mt-2 text-sm text-gray-500">
-                Post active jobs with detailed requirements to help our AI find the best candidates for your positions. Candidates with 30%+ match scores will appear here.
-              </p>
-              <Link to="/candidates" className="mt-4 inline-block">
-                <Button variant="outline">Browse Candidates</Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {candidates.map((candidate) => (
-                <div key={candidate.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-gray-300 rounded-full flex items-center justify-center">
-                      <svg className="h-6 w-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900">
-                        <Link to={`/candidates/${candidate.id}`} className="hover:text-blue-600">
-                          {candidate.full_name}
-                        </Link>
-                      </h4>
-                      <p className="text-sm text-gray-600">{candidate.headline}</p>
-                      <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                          </svg>
-                          {candidate.location}
-                        </span>
-                        {candidate.candidate_profiles && (
-                          <>
-                            <span>{candidate.candidate_profiles.years_experience} years exp.</span>
-                            <span>{candidate.candidate_profiles.skills.slice(0, 3).join(', ')}</span>
-                          </>
-                        )}
-                      </div>
-                      
-                      {/* Best matching job info */}
-                      {candidate.best_matching_job && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          Best match: <span className="font-medium text-gray-700">{candidate.best_matching_job}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {/* AI Match Score */}
-                    {candidate.match_score !== undefined && (
-                      <div className="flex items-center gap-1">
-                        <svg className="h-4 w-4 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <span className={`text-sm font-semibold ${
-                          candidate.match_score >= 80 ? 'text-green-600' :
-                          candidate.match_score >= 60 ? 'text-yellow-600' :
-                          candidate.match_score >= 40 ? 'text-orange-600' : 'text-red-600'
-                        }`}>
-                          {candidate.match_score}%
-                        </span>
-                      </div>
-                    )}
-                    
-                    <Link to={`/candidates/${candidate.id}`}>
-                      <Button variant="outline" size="sm">
-                        View Profile
-                      </Button>
-                    </Link>
                   </div>
                 </div>
               ))}
